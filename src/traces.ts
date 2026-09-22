@@ -15,7 +15,7 @@ export function buildFrames(id:string, raw:string):Frame[] {
    for(let i=0;i<nums.length;i++) {
     const need=d.target-nums[i]; const f=base(`Pick up ${nums[i]}`,`We have ${nums[i]}. Its missing partner is ${d.target} − ${nums[i]} = ${need}.`,2,ns.map((n,j)=>({...n,state:j===i?'active':j<i?'visited':undefined})));
     f.nodes[i].y=110; f.pointers=[{id:'i',label:`i = ${i}`,x:ns[i].x,y:54}]; f.memory=[...seen].map(([v,j])=>[String(v),String(j)]);f.memoryLabel='MEMORY · value → index'; f.stats=`${nums[i]} + ? = ${d.target}`; add(f);
-    if(seen.has(need)) { const j=seen.get(need)!; f.title='The pair clicks!';f.text=`${need} + ${nums[i]} = ${d.target}. Return indices [${j}, ${i}].`;f.line=5;f.nodes.forEach((n,k)=>{if(k!==i&&k!==j){n.state='muted';n.y=215;}});f.nodes[j].state='found';f.nodes[i].state='found';f.nodes[j].x=295;f.nodes[i].x=405;f.nodes[j].y=f.nodes[i].y=110;f.edges=[{id:'pair',from:`n${j}`,to:`n${i}`,active:true}];f.result=`[${j}, ${i}]`;f.stats=`${need} + ${nums[i]} = ${d.target}`;add(f);return frames; }
+    if(seen.has(need)) { const j=seen.get(need)!; f.title='The pair clicks!';f.text=`${need} + ${nums[i]} = ${d.target}. Return indices [${j}, ${i}].`;f.line=5;f.nodes.forEach((n,k)=>{if(k!==i&&k!==j){n.state='muted';n.y=215;}});f.nodes[j].state='found';f.nodes[i].state='found';f.nodes[j].x=295;f.nodes[i].x=405;f.nodes[j].y=f.nodes[i].y=110;f.pointers=[{id:'partner',label:'index '+j,x:295,y:54},{id:'i',label:'index '+i,x:405,y:54}];f.edges=[{id:'pair',from:`n${j}`,to:`n${i}`,active:true}];f.result=`[${j}, ${i}]`;f.stats=`${need} + ${nums[i]} = ${d.target}`;add(f);return frames; }
     f.title=`Remember ${nums[i]}`;f.text=`${need} is not in memory yet. Save ${nums[i]} at index ${i} so a future number can find it.`;f.line=4;seen.set(nums[i],i);f.memory=[...seen].map(([v,j])=>[String(v),String(j)]);add(f);
    }
    add({...base('No matching pair','No two different positions add up to this target.',5,ns),result:'No pair'});
@@ -70,4 +70,5 @@ export function buildFrames(id:string, raw:string):Frame[] {
  }
  return frames;
 }
+
 
