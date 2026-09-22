@@ -1,5 +1,7 @@
 # AlgoPlay
 
+[Live demo](https://algoplay-v4.vercel.app) | [Source](https://github.com/AhmedB03/AlgoPlayV4)
+
 A React coding-practice app that makes algorithms visible: moving pointers, animated blocks, reversed linked-list arrows, stack operations, and graph traversal.
 
 ## Run locally
@@ -67,3 +69,4 @@ Keep `.vercel`, `.env` files, `node_modules`, and `dist` out of source control. 
 ## Accessibility
 
 Keyboard-operable controls, labeled animation controls and editor, native focus-trapped dialogs, visible focus rings, reduced-motion support, text explanations alongside visual state, and responsive layouts. Code and completion data belong to the current browser and device.
+
