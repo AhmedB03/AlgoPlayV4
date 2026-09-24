@@ -36,22 +36,26 @@ Each problem has an original explanation, constraints, examples, hints, an analo
 
 ## A 90-second demo
 
-1. Open Two Sum, press Play, and show how the pointer and matching blocks move.
-2. Select Reverse Linked List, use focus mode, and show arrows turning around.
-3. Select Graph Breadth-First Search and watch the moving visitor and queue.
-4. Click Load solution, then Submit. Explain the test results and saved progress.
-5. Edit an animation input to show that the walkthrough is generated from the data.
+1. Open Two Sum from the problem list, switch to the **Visualizer** tab, and press Play to show the pointer and matching blocks move.
+2. Use **Problem List** (or the arrows in the top bar) to open Reverse Linked List, use focus mode, and show arrows turning around.
+3. Open Graph Breadth-First Search and watch the moving visitor and queue.
+4. Click Load solution, then **Submit** (Ctrl/⌘ + Enter). Show the verdict, the per-case results, and the entry under **Submissions**.
+5. Click Edit input in the Visualizer to show that the walkthrough is generated from the data.
+
+## Layout
+
+The workspace follows the LeetCode/NeetCode layout: a tabbed problem pane on the left (Description, Editorial, Visualizer, Submissions), the code editor on the top right, and a Testcase / Test Result console underneath. Drag the dividers to resize panes; the sizes are remembered. Run and Submit sit in the top bar (Ctrl/⌘ + ' and Ctrl/⌘ + Enter). A light/dark theme toggle is in the top-right corner.
 
 ## Architecture
 
 - React + TypeScript + Vite
 - Motion for continuous SVG and layout animation
-- CodeMirror for the JavaScript editor
+- CodeMirror for the JavaScript editor (lazy-loaded when the workspace opens)
 - Dedicated Web Worker for execution with a 3-second termination limit
 - Vitest for judge and animation correctness
-- Local browser storage for code drafts and solved status
+- Local browser storage for code drafts, submissions, solved status, theme, and pane sizes
 
-`src/problems.ts` contains lesson content, starter code, reference solutions, and tests. `src/traces.ts` generates deterministic reference-algorithm traces from validated custom input. `src/App.tsx` animates objects between trace states. `src/judge.ts` validates function output and adapts linked-list inputs and outputs.
+`src/problems.ts` contains lesson content, starter code, reference solutions, and tests. `src/traces.ts` generates deterministic reference-algorithm traces from validated custom input. `src/App.tsx` is the app shell and workspace; `src/components/` holds the visualizer (which animates objects between trace states), problem list, editor, test console, and resizable pane dividers. `src/judge.ts` validates function output and adapts linked-list inputs and outputs.
 
 Animations describe the reference algorithm; they do not instrument arbitrary user code. Run executes two sample tests; Submit executes the full included suite. Animation inputs are size-limited for legibility. The editor executes JavaScript only. There is no account system, backend, remote judge, or cloud progress sync. The worker keeps accidental infinite loops off the UI thread; this is a local learning runner, not a hardened multi-tenant sandbox. Do not add secrets to the frontend or execute untrusted imported code.
 

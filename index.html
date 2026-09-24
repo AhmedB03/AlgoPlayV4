@@ -1,1 +1,20 @@
-<!doctype html><html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/><meta name="theme-color" content="#111316"/><meta name="description" content="Practice coding. See the logic. AlgoPlay makes algorithms click with interactive animations and a real coding workspace."/><link rel="icon" type="image/svg+xml" href="/favicon.svg"/><title>AlgoPlay — See the logic.</title></head><body><div id="root"></div><script type="module" src="/src/main.tsx"></script></body></html>
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+    <meta name="theme-color" content="#1a1a1a" />
+    <meta name="description" content="Practice coding. See the logic. AlgoPlay makes algorithms click with interactive animations and a real coding workspace." />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <title>AlgoPlay</title>
+    <script>
+      // Apply the saved theme before first paint to avoid a flash.
+      try { document.documentElement.dataset.theme = JSON.parse(localStorage.getItem('algoplay-theme')) || 'dark'; }
+      catch { document.documentElement.dataset.theme = 'dark'; }
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

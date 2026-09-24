@@ -1,77 +1,480 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { motion, AnimatePresence, MotionConfig } from 'motion/react';
-import CodeMirror from '@uiw/react-codemirror';
-import { javascript } from '@codemirror/lang-javascript';
-import { oneDark } from '@codemirror/theme-one-dark';
-import { Play, Pause, RotateCcw, SkipBack, SkipForward, ChevronRight, ChevronLeft, Search, Check, Circle, Code2, Braces, Network, Link2, Binary, Layers3, ArrowUpRight, BookOpen, Lightbulb, ListFilter, PanelLeftClose, PanelLeftOpen, Terminal, FlaskConical, X, Maximize2, Minimize2, Zap } from 'lucide-react';
+import { Fragment, lazy, Suspense, useEffect, useRef, useState, type ReactNode } from 'react';
+import { AnimatePresence, motion, MotionConfig } from 'motion/react';
+import {
+  BookOpen, ChevronDown, ChevronLeft, ChevronRight, CircleCheckBig, CircleHelp, CirclePlay, CloudUpload, CodeXml,
+  FileText, History, Lightbulb, List, Moon, Play, RotateCcw, Shuffle, Sun, Tag, X,
+} from 'lucide-react';
 import { problems, type Problem } from './problems';
-import { buildFrames, type Frame, type VisualNode } from './traces';
 import type { Result } from './judge';
+import { read, save } from './storage';
+import { paramNames, show, timeAgo } from './format';
+import { Visualizer } from './components/Visualizer';
+import { ProblemList, difficultyClass } from './components/ProblemList';
+import { Console, SAMPLE_COUNT, type RunState, type Verdict } from './components/Console';
+import { Gutter } from './components/Gutter';
 import './styles.css';
-const icons=[Braces,Link2,Code2,Binary,Layers3,Network];
-function read<T>(key:string,fallback:T):T {try{return JSON.parse(localStorage.getItem(key)??'null')??fallback;}catch{return fallback;}}
-function save(key:string,value:unknown){try{localStorage.setItem(key,JSON.stringify(value));}catch{/* Storage may be unavailable in private mode. */}}
-function initialId(){return problems.some(p=>p.id===location.hash.slice(1))?location.hash.slice(1):'two-sum';}
-function Visualizer({frame,problem,speed}:{frame:Frame;problem:Problem;speed:number}){
- const colors={active:'#b5f36b',found:'#b5f36b',visited:'#96a6e9',muted:'#434950'};
- const graph=problem.id==='graph-bfs';
- return <svg className="scene" viewBox="0 0 700 285" role="img" aria-label={`${problem.title} animation: ${frame.title}. ${frame.text}`}>
-  <defs><pattern id="grid" width="22" height="22" patternUnits="userSpaceOnUse"><circle cx="1" cy="1" r="0.7" fill="#34383e"/></pattern><marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto-start-reverse"><path d="M0,0 L8,4 L0,8" fill="none" stroke="#8d98ae" strokeWidth="1.5"/></marker><marker id="arrow-active" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8" fill="none" stroke="#b5f36b" strokeWidth="1.5"/></marker></defs>
-  <rect width="700" height="285" fill="url(#grid)"/>
-  {problem.id==='parentheses'&&<><path d="M302 155V252H398V155" fill="none" stroke="#57616e" strokeWidth="2" strokeDasharray="4 4"/><text x="350" y="275" className="svg-caption" textAnchor="middle">STACK</text></>}
-  <AnimatePresence>{frame.edges.map(e=>{
-   const a=frame.nodes.find(n=>n.id===e.from),b=frame.nodes.find(n=>n.id===e.to);if(!a||!b)return null;
-   const dx=b.x-a.x,dy=b.y-a.y,dist=Math.hypot(dx,dy)||1,r=graph?27:33;
-   const x1=a.x+dx/dist*r,y1=a.y+dy/dist*r,x2=b.x-dx/dist*(r+5),y2=b.y-dy/dist*(r+5);
-   const d=e.curved?`M${x1},${y1+20} Q350,260 ${x2},${y2+20}`:e.from===e.to?`M${a.x-18},${a.y-20} C${a.x-65},${a.y-90} ${a.x+65},${a.y-90} ${a.x+18},${a.y-20}`:`M${x1},${y1} L${x2},${y2}`;
-   return <motion.path key={e.id} initial={{pathLength:0,opacity:0}} animate={{d,pathLength:1,opacity:1}} exit={{opacity:0}} transition={{duration:.65/speed}} fill="none" stroke={e.active?'#b5f36b':'#667080'} strokeWidth={e.active?2.8:1.6} markerEnd={`url(#${e.active?'arrow-active':'arrow'})`}/>;
-  })}</AnimatePresence>
-  {frame.nodes.map((n:VisualNode)=><motion.g key={n.id} initial={false} animate={{x:n.x,y:n.y,opacity:n.state==='muted'?.26:1}} transition={{type:'spring',stiffness:85*speed,damping:18}}>
-   {graph?<motion.circle r="25" animate={{fill:n.state==='active'||n.state==='found'?'#b5f36b':n.state==='visited'?'#30364d':'#23272d',stroke:n.state?colors[n.state]:'#505964'}} strokeWidth="2"/>:<motion.rect x="-27" y="-27" width="54" height="54" rx="9" animate={{fill:n.state==='active'||n.state==='found'?'#b5f36b':n.state==='visited'?'#30364d':'#23272d',stroke:n.state?colors[n.state]:'#505964'}} strokeWidth="1.5"/>}
-   <text textAnchor="middle" dominantBaseline="central" className="node-value" fill={n.state==='active'||n.state==='found'?'#15200e':'#e8ebef'}>{n.value}</text>
-   {n.sub!==undefined&&<text y="48" textAnchor="middle" className="svg-caption">{n.sub}</text>}
-  </motion.g>)}
-  {frame.pointers.map(p=><motion.g key={p.id} initial={false} animate={{x:p.x,y:p.y}} transition={{type:'spring',stiffness:75*speed,damping:17}}><text textAnchor="middle" className="pointer-label" fill={p.color??'#b5f36b'}>{p.label}</text><path d="M0 8V26M-4 22L0 26L4 22" stroke={p.color??'#b5f36b'} fill="none" strokeWidth="2"/></motion.g>)}
-  {frame.focus&&(()=>{const n=frame.nodes.find(n=>n.id===frame.focus);return n?<motion.circle r="34" fill="none" stroke="#b5f36b" strokeWidth="2" strokeDasharray="5 5" initial={false} animate={{cx:n.x,cy:n.y}} transition={{duration:.65/speed}}/>:null;})()}
-  {frame.nodes.length===0&&<text x="350" y="145" textAnchor="middle" className="svg-caption">Empty input · nothing to visit</text>}
- </svg>;
+
+const Editor = lazy(() => import('./components/Editor'));
+
+type Theme = 'dark' | 'light';
+type LeftTab = 'description' | 'editorial' | 'visualizer' | 'submissions';
+type Submission = { at: number; verdict: Verdict; passed: number; total: number; runtime?: number };
+
+const TIME_LIMIT_MS = 3000;
+const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
+const mod = isMac ? '⌘' : 'Ctrl';
+
+const hashId = () => location.hash.slice(1);
+const isProblemId = (id: string) => problems.some(p => p.id === id);
+
+/** Wraps parameter names and a few literals in <code>, the way LeetCode formats statements. */
+function RichText({ text, names }: { text: string; names: string[] }) {
+  const words = [...names, 'val', 'next', 'null', 'true', 'false'].map(w => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  const parts = text.split(new RegExp(`(?<![\\w'’])(${words.join('|')})(?![\\w'’])`, 'g'));
+  return <>{parts.map((part, i) => (i % 2 ? <code key={i}>{part}</code> : part))}</>;
 }
-export default function App(){
- const [id,setId]=useState(initialId);const problem=problems.find(p=>p.id===id)!;
- const [page,setPage]=useState<'workspace'|'problems'>('workspace');const [sidebar,setSidebar]=useState(true);const [query,setQuery]=useState('');const [category,setCategory]=useState('All topics');
- const [codes,setCodes]=useState<Record<string,string>>(()=>read('algoplay-code',{}));const [solved,setSolved]=useState<string[]>(()=>read('algoplay-solved',[]));
- const [demo,setDemo]=useState(problem.demo);const [draft,setDraft]=useState(problem.demo);const [inputError,setInputError]=useState('');const [step,setStep]=useState(0);const [playing,setPlaying]=useState(false);const [speed,setSpeed]=useState(1);const [full,setFull]=useState(false);
- const [descTab,setDescTab]=useState<'description'|'approach'>('description');const [hint,setHint]=useState(false);const [custom,setCustom]=useState(false);const [guide,setGuide]=useState(false);
- const [results,setResults]=useState<Result[]>([]);const [running,setRunning]=useState(false);const [runError,setRunError]=useState('');const [resultTab,setResultTab]=useState(false);const [mode,setMode]=useState('Run');
- const worker=useRef<Worker|null>(null);const runTimer=useRef<ReturnType<typeof setTimeout>|null>(null);const guideRef=useRef<HTMLDialogElement>(null);const inputRef=useRef<HTMLDialogElement>(null);
- const frames=useMemo(()=>buildFrames(id,demo),[id,demo]);const frame=frames[Math.min(step,frames.length-1)];const code=codes[id]??problem.starter;
- const filtered=problems.filter(p=>(p.title+' '+p.category).toLowerCase().includes(query.toLowerCase())&&(category==='All topics'||p.category===category));
- useEffect(()=>{save('algoplay-code',codes);},[codes]);useEffect(()=>{save('algoplay-solved',solved);},[solved]);
- useEffect(()=>{const f=()=>{const next=initialId();if(next!==id)select(next);};window.addEventListener('hashchange',f);return()=>window.removeEventListener('hashchange',f);},[id]);
- useEffect(()=>{if(!playing)return;const timer=setInterval(()=>setStep(s=>{if(s>=frames.length-1){setPlaying(false);return s;}return s+1;}),1800/speed);return()=>clearInterval(timer);},[playing,speed,frames.length]);
- useEffect(()=>()=>{worker.current?.terminate();if(runTimer.current)clearTimeout(runTimer.current);},[]);
- useEffect(()=>{if(guide)guideRef.current?.showModal();else guideRef.current?.close();},[guide]);useEffect(()=>{if(custom)inputRef.current?.showModal();else inputRef.current?.close();},[custom]);
- function select(next:string){const p=problems.find(p=>p.id===next)!;worker.current?.terminate();if(runTimer.current)clearTimeout(runTimer.current);setRunning(false);setId(next);location.hash=next;setDemo(p.demo);setDraft(p.demo);setStep(0);setPlaying(false);setResults([]);setRunError('');setInputError('');setResultTab(false);setHint(false);setPage('workspace');}
- function run(submit=false){worker.current?.terminate();if(runTimer.current)clearTimeout(runTimer.current);setPlaying(false);setRunning(true);setResultTab(true);setRunError('');setResults([]);setMode(submit?'Submit':'Run');const w=new Worker(new URL('./runner.worker.ts',import.meta.url),{type:'module'});worker.current=w;
-  const end=()=>{w.terminate();setRunning(false);if(runTimer.current)clearTimeout(runTimer.current);};
-  runTimer.current=setTimeout(()=>{end();setRunError('Time limit exceeded (3 seconds). Check for an infinite loop and try again.');},3000);
-  w.onmessage=({data})=>{end();if(data.error)setRunError(data.error);else{setResults(data.results);if(submit&&data.results.every((r:Result)=>r.passed))setSolved(s=>s.includes(id)?s:[...s,id]);}};
-  w.onerror=(e)=>{end();setRunError(e.message||'Could not run your code.');};w.postMessage({code,problem:{id:problem.id,functionName:problem.functionName,tests:submit?problem.tests:problem.tests.slice(0,2)}});
- }
- function play(){if(step===frames.length-1)setStep(0);setPlaying(!playing);}
- const passCount=results.filter(r=>r.passed).length;
- return <MotionConfig reducedMotion="user"><div className="app">
-  <header className="topbar"><a href="#two-sum" className="brand" onClick={e=>{e.preventDefault();select('two-sum');}}><span className="brand-mark"><Play size={18} fill="currentColor"/></span>algo<span className="brand-light">play</span><span className="beta">BETA</span></a><nav aria-label="Main navigation"><button className={page==='problems'?'nav-active':''} onClick={()=>setPage('problems')}>Problems</button><button className={page==='workspace'?'nav-active':''} onClick={()=>setPage('workspace')}>Playground</button></nav><div className="top-right"><span className="local-progress"><Check size={14}/>{solved.length} / 6 solved</span><button className="guide-btn" onClick={()=>setGuide(true)}><BookOpen size={15}/> Quick guide</button><span className="avatar" aria-label="Local learner profile">AP</span></div></header>
-  {page==='problems'?<main className="library"><div className="eyebrow">THE FOUNDATION COLLECTION</div><h1>Small problems.<br/><span>Big lightbulb moments.</span></h1><p>Write it. Run it. Watch it click. Six essential patterns to build your intuition.</p><div className="library-toolbar"><label className="search"><Search size={16}/><input aria-label="Search problems" placeholder="Search problems or topics…" value={query} onChange={e=>setQuery(e.target.value)}/></label><select aria-label="Filter topic" value={category} onChange={e=>setCategory(e.target.value)}><option>All topics</option>{problems.map(p=><option key={p.id}>{p.category}</option>)}</select><span>{solved.length} of 6 completed on this device</span></div><div className="problem-table"><div className="table-head"><span>Status</span><span>Problem</span><span>Topic</span><span>Difficulty</span><span/></div>{filtered.map(p=><button className="table-row" key={p.id} onClick={()=>select(p.id)}><span>{solved.includes(p.id)?<Check className="lime" size={18}/>:<Circle size={16}/>}</span><span><b>{p.number.toString().padStart(2,'0')}. {p.title}</b><small>{p.summary}</small></span><span className="topic-text">{p.category}</span><span className="easy">{p.difficulty}</span><ArrowUpRight size={17}/></button>)}{filtered.length===0&&<p className="empty">No problems match your search. Try a different topic.</p>}</div><div className="library-foot"><Zap size={16}/> Every problem includes a moving, interactive explanation.</div></main>:<>
-  <div className="workspace-bar"><button className="icon-btn" aria-label={sidebar?'Hide problem list':'Show problem list'} onClick={()=>setSidebar(!sidebar)}>{sidebar?<PanelLeftClose size={17}/>:<PanelLeftOpen size={17}/>}</button><button className="crumb" onClick={()=>setPage('problems')}>Foundation collection</button><ChevronRight size={13}/><span>{problem.title}</span><div className="problem-paging"><button className="icon-btn" aria-label="Previous problem" onClick={()=>select(problems[(problem.number+4)%6].id)}><ChevronLeft size={17}/></button><span>{problem.number} / 6</span><button className="icon-btn" aria-label="Next problem" onClick={()=>select(problems[problem.number%6].id)}><ChevronRight size={17}/></button></div></div>
-  <main className={`workspace ${sidebar?'':'no-sidebar'} ${full?'focus-mode':''}`}>
-   {sidebar&&<aside className="sidebar"><div className="sidebar-title">PROBLEM SET <span>06</span></div><label className="search small"><Search size={14}/><input aria-label="Find a problem" placeholder="Find a problem…" value={query} onChange={e=>setQuery(e.target.value)}/></label><div className="side-problems">{problems.filter(p=>(p.title+' '+p.category).toLowerCase().includes(query.toLowerCase())).map(p=>{const Icon=icons[p.number-1];return <button key={p.id} className={`side-problem ${id===p.id?'selected':''}`} onClick={()=>select(p.id)}><span className="category-label"><Icon size={13}/>{p.category}</span><span className="side-title">{solved.includes(p.id)?<Check size={14}/>:<span className="problem-dot"/>}{p.title}{id===p.id&&<ChevronRight size={13}/>}</span></button>;})}</div><div className="side-bottom"><div className="progress-heading"><span>Your foundation</span><b>{Math.round(solved.length/6*100)}%</b></div><div className="progress-track"><span style={{width:`${solved.length/6*100}%`}}/></div><small>Progress saved on this device</small></div></aside>}
-   <section className="description-panel"><div className="panel-tabs"><button className={descTab==='description'?'active':''} onClick={()=>setDescTab('description')}><BookOpen size={14}/>Description</button><button className={descTab==='approach'?'active':''} onClick={()=>setDescTab('approach')}><Lightbulb size={14}/>Approach</button></div><div className="description-content"><div className="problem-kicker">PROBLEM {problem.number.toString().padStart(2,'0')}</div><h1>{problem.title}</h1><div className="tags"><span className="easy">Easy</span><span className="topic-tag">{problem.category}</span>{solved.includes(id)&&<span className="lime"><Check size={15}/></span>}</div>{descTab==='description'?<><p className="statement">{problem.detail}</p><h3>Example 1</h3><div className="example"><div><span>Input</span><code>{problem.example}</code></div><div><span>Output</span><code className="lime">{problem.output}</code></div></div><p className="explanation">{problem.explanation}</p><h3>Constraints</h3><ul className="constraints">{problem.constraints.map(c=><li key={c}>{c}</li>)}</ul><button className={`hint ${hint?'open':''}`} onClick={()=>setHint(!hint)} aria-expanded={hint}><span><Lightbulb size={16}/>A little nudge</span><ChevronRight size={15}/></button>{hint&&<p className="hint-text">{problem.hint}</p>}</>:<><p className="statement">{problem.hint}</p><h3>Think of it this way</h3><div className="analogy">{problem.analogy}</div><h3>The recipe</h3><ol className="recipe">{problem.pseudocode.map(s=><li key={s}>{s}</li>)}</ol><div className="complexity"><div><small>TIME</small><code>{problem.complexity[0]}</code></div><div><small>EXTRA SPACE</small><code>{problem.complexity[1]}</code></div></div><p className="fine">Complexity describes the reference solution.</p></>}</div><div className="description-footer"><span className="tiny-play"><Play size={12}/></span>Don't just solve it. See it.</div></section>
-   <div className="work-area"><section className="visual-panel"><div className="panel-heading"><div><span className="green-dot"/><b>Visual playground</b><span className="reference-tag">Reference solution</span></div><button className="icon-btn" aria-label={full?'Exit focus mode':'Focus animation'} onClick={()=>setFull(!full)}>{full?<Minimize2 size={15}/>:<Maximize2 size={15}/>}</button></div><div className="viz-subbar"><span>{problem.category}<ChevronRight size={12}/><b>{problem.id==='two-sum'?'Hash map':problem.id==='reverse-list'?'Pointer reversal':problem.id==='graph-bfs'?'Breadth-first search':problem.id==='parentheses'?'Stack matching':'Two pointers'}</b></span><button onClick={()=>{setDraft(demo);setCustom(true);setInputError('');setPlaying(false);}}><Braces size={13}/>Edit input</button></div><div className="animation-body"><div className="scene-heading"><span>{frame.stats??'Follow the highlighted objects'}</span><span className="scene-legend"><i/>Active <i/>Visited</span></div><Visualizer frame={frame} problem={problem} speed={speed}/>{frame.memory!==undefined&&<div className="memory-strip"><span>{frame.memoryLabel}</span><div><AnimatePresence mode="popLayout">{frame.memory.length?frame.memory.map(([key,value])=><motion.code layout key={key} initial={{opacity:0,y:-22,scale:.7}} animate={{opacity:1,y:0,scale:1}} exit={{opacity:0,y:-20}} transition={{duration:.5/speed}}>{problem.id==='two-sum'?`${key} → ${value}`:value}</motion.code>):<em>empty</em>}</AnimatePresence></div></div>}</div><div className={`narration ${frame.result?'complete':''}`} aria-live="polite"><div className="step-number">{frame.result?<Check size={18}/>:String(step+1).padStart(2,'0')}</div><div><strong>{frame.title}</strong><p>{frame.text}</p></div>{frame.result&&<code className="result-pill">{frame.result}</code>}</div><div className="playback"><button className="icon-btn" aria-label="Restart animation" onClick={()=>{setStep(0);setPlaying(false);}}><RotateCcw size={15}/></button><button className="icon-btn" aria-label="Previous step" disabled={step===0} onClick={()=>{setPlaying(false);setStep(s=>Math.max(0,s-1));}}><SkipBack size={16}/></button><button className="play-button" aria-label={playing?'Pause animation':'Play animation'} onClick={play}>{playing?<Pause size={17} fill="currentColor"/>:<Play size={17} fill="currentColor"/>}</button><button className="icon-btn" aria-label="Next step" disabled={step===frames.length-1} onClick={()=>{setPlaying(false);setStep(s=>Math.min(frames.length-1,s+1));}}><SkipForward size={16}/></button><input type="range" aria-label="Animation step" min="0" max={frames.length-1} value={step} onChange={e=>{setStep(Number(e.target.value));setPlaying(false);}}/><span className="step-count">{step+1}<span> / {frames.length}</span></span><select aria-label="Animation speed" value={speed} onChange={e=>setSpeed(Number(e.target.value))}><option value="0.5">0.5×</option><option value="1">1×</option><option value="1.5">1.5×</option><option value="2">2×</option></select></div></section>
-   <section className="code-panel"><div className="panel-heading"><div><Code2 size={16}/><b>Your solution</b><span className="reference-tag">JavaScript</span></div><div><button className="text-btn" onClick={()=>{setCodes(s=>({...s,[id]:problem.solution}));setResultTab(false);}}>Load solution</button><button className="icon-btn" aria-label="Reset code to starter" onClick={()=>{setCodes(s=>({...s,[id]:problem.starter}));setResultTab(false);}}><RotateCcw size={14}/></button></div></div><div className="coding-body"><div className="editor-wrap"><CodeMirror value={code} height="245px" theme={oneDark} extensions={[javascript()]} onChange={v=>setCodes(s=>({...s,[id]:v}))} aria-label="JavaScript solution editor" basicSetup={{foldGutter:false,highlightActiveLine:true}}/></div><div className="algorithm"><div className="algorithm-title"><ListFilter size={13}/>ANIMATION LOGIC</div>{problem.pseudocode.map((line,i)=><div key={line} className={i===frame.line?'current-line':''}><span>{i+1}</span><p>{line}</p>{i===frame.line&&<ChevronLeft size={12}/>}</div>)}</div></div><div className="editor-footer"><span><span className="saved-dot"/>Saved on this device</span><div><button className="run-btn" disabled={running} onClick={()=>run(false)}><Play size={13}/>{running?'Running…':'Run'}</button><button className="submit-btn" disabled={running} onClick={()=>run(true)}><Check size={15}/>Submit</button></div></div><div className="test-header"><button className={resultTab?'':'active'} onClick={()=>setResultTab(false)}><FlaskConical size={14}/>Test cases</button><button className={resultTab?'active':''} onClick={()=>setResultTab(true)}><Terminal size={14}/>Results {results.length>0&&<span className={passCount===results.length?'lime':'error-text'}>{passCount}/{results.length}</span>}</button><span>{mode==='Submit'?'Full test suite':'Sample tests'}</span></div><div className="test-content">{resultTab?<>{running?<p className="running-text">Running your JavaScript in an isolated worker…</p>:runError?<p className="error-box" role="alert">{runError}</p>:results.length?<><div className={`result-summary ${passCount===results.length?'lime':'error-text'}`}>{passCount===results.length?<Check size={17}/>:<X size={17}/>}<b>{passCount===results.length?(mode==='Submit'?'Accepted':'Samples passed'):'Not quite yet'}</b><span>{passCount} / {results.length} tests passed</span></div>{results.map((r,i)=><details className="test-result" key={i} open={!r.passed}><summary>{r.passed?<Check size={13}/>:<X size={13}/>}Case {i+1} · {r.label}<span>{r.passed?'Passed':'Failed'}</span></summary><div><p>Input <code>{r.input}</code></p><p>Expected <code>{r.expected}</code></p><p>Received <code>{r.error??r.actual}</code></p></div></details>)}</>:<p className="fine">Run your code to see the results here.</p>}</>:<><div className="case-pills">{problem.tests.slice(0,2).map((t,i)=><span key={t.label}>Case {i+1} <small>{t.label}</small></span>)}</div><code className="test-input">{problem.example}</code><p className="fine">Run checks 2 examples. Submit checks all {problem.tests.length} cases. Animations show the reference algorithm.</p></>}</div></section>
-   </div>
-  </main></>}
-  <dialog ref={inputRef} onCancel={()=>setCustom(false)} onClick={e=>{if(e.target===e.currentTarget)setCustom(false);}}><div className="dialog-heading"><h2>Make it your example</h2><button className="icon-btn" aria-label="Close input editor" onClick={()=>setCustom(false)}><X size={18}/></button></div><p>Change the values and watch the reference algorithm work through them.</p><label className="input-label" htmlFor="custom-input">Animation input · JSON</label><textarea id="custom-input" spellCheck={false} value={draft} onChange={e=>setDraft(e.target.value)}/>{inputError&&<p className="error-box" role="alert">{inputError}</p>}<div className="dialog-actions"><button className="run-btn" onClick={()=>setDraft(problem.demo)}>Default example</button><button className="submit-btn" onClick={()=>{try{buildFrames(id,draft);setDemo(draft);setStep(0);setPlaying(false);setCustom(false);}catch(e){setInputError(e instanceof Error?e.message:'Invalid input');}}}>Animate input<ArrowUpRight size={15}/></button></div></dialog>
-  <dialog ref={guideRef} onCancel={()=>setGuide(false)} onClick={e=>{if(e.target===e.currentTarget)setGuide(false);}}><div className="dialog-heading"><h2>A little practice. A lot of clarity.</h2><button className="icon-btn" aria-label="Close guide" onClick={()=>setGuide(false)}><X size={18}/></button></div><ol className="guide-steps"><li><b>Understand the problem</b><p>Read the example or open Approach for a hint and a simple analogy.</p></li><li><b>See the logic in motion</b><p>Press play. Pause, scrub, slow it down, or edit the input. The animation follows the reference solution, with the current action highlighted below.</p></li><li><b>Try it yourself</b><p>Write JavaScript in the editor. Run checks examples; Submit checks the full suite. Load solution gives you a working example to explore.</p></li></ol><div className="guide-note">Code and completed problems stay in this browser. No account needed. Linked-list tests use real nodes with val and next.</div><button className="submit-btn" onClick={()=>{setGuide(false);setPlaying(true);}}>Let's play<Play size={14}/></button></dialog>
- </div></MotionConfig>;
+
+function Examples({ problem }: { problem: Problem }) {
+  const names = paramNames(problem);
+  const extra = problem.tests.slice(1, 3).map(t => ({
+    input: t.args.map((a, i) => `${names[i] ?? `arg${i + 1}`} = ${show(a)}`).join(', '),
+    output: show(t.expected),
+  }));
+  const all = [{ input: problem.example, output: problem.output, explanation: problem.explanation }, ...extra];
+  return (
+    <>
+      {all.map((ex, i) => (
+        <Fragment key={i}>
+          <p className="example-title">Example {i + 1}:</p>
+          <div className="example">
+            <p><b>Input:</b> <span>{ex.input}</span></p>
+            <p><b>Output:</b> <span>{ex.output}</span></p>
+            {'explanation' in ex && ex.explanation && <p><b>Explanation:</b> <span>{ex.explanation}</span></p>}
+          </div>
+        </Fragment>
+      ))}
+    </>
+  );
+}
+
+function Accordion({ icon, title, children }: { icon: ReactNode; title: string; children: ReactNode }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className={`accordion ${open ? 'open' : ''}`}>
+      <button onClick={() => setOpen(!open)} aria-expanded={open}>
+        <span>{icon}{title}</span>
+        <ChevronDown size={16} />
+      </button>
+      {open && <div className="accordion-body">{children}</div>}
+    </div>
+  );
+}
+
+export default function App() {
+  const [id, setId] = useState(() => (isProblemId(hashId()) ? hashId() : problems[0].id));
+  const [page, setPage] = useState<'workspace' | 'problems'>(() => (isProblemId(hashId()) ? 'workspace' : 'problems'));
+  const problem = problems.find(p => p.id === id)!;
+  const index = problems.indexOf(problem);
+
+  const [theme, setTheme] = useState<Theme>(() => read('algoplay-theme', 'dark'));
+  const [codes, setCodes] = useState<Record<string, string>>(() => read('algoplay-code', {}));
+  const [solved, setSolved] = useState<string[]>(() => read('algoplay-solved', []));
+  const [submissions, setSubmissions] = useState<Record<string, Submission[]>>(() => read('algoplay-submissions', {}));
+  const [split, setSplit] = useState(() => read('algoplay-split', { x: 44, y: 60 }));
+
+  const [leftTab, setLeftTab] = useState<LeftTab>('description');
+  const [drawer, setDrawer] = useState(false);
+  const [guide, setGuide] = useState(false);
+  const [focus, setFocus] = useState(false);
+  const [playToken, setPlayToken] = useState(0);
+  const [run, setRun] = useState<RunState | null>(null);
+  const [consoleTab, setConsoleTab] = useState<'testcase' | 'result'>('testcase');
+
+  const worker = useRef<Worker | null>(null);
+  const runTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const guideRef = useRef<HTMLDialogElement>(null);
+  const workspaceRef = useRef<HTMLElement>(null);
+  const rightRef = useRef<HTMLDivElement>(null);
+
+  const code = codes[id] ?? problem.starter;
+  const names = paramNames(problem);
+  const attempted = Object.keys(submissions).filter(k => submissions[k].length && !solved.includes(k));
+
+  useEffect(() => { save('algoplay-code', codes); }, [codes]);
+  useEffect(() => { save('algoplay-solved', solved); }, [solved]);
+  useEffect(() => { save('algoplay-submissions', submissions); }, [submissions]);
+  useEffect(() => { save('algoplay-split', split); }, [split]);
+  useEffect(() => {
+    save('algoplay-theme', theme);
+    document.documentElement.dataset.theme = theme;
+  }, [theme]);
+  useEffect(() => { document.title = page === 'workspace' ? `${problem.number}. ${problem.title} · AlgoPlay` : 'Problems · AlgoPlay'; }, [page, problem]);
+
+  useEffect(() => {
+    const onHash = () => {
+      const next = hashId();
+      if (isProblemId(next)) select(next);
+      else setPage('problems');
+    };
+    window.addEventListener('hashchange', onHash);
+    return () => window.removeEventListener('hashchange', onHash);
+  });
+
+  useEffect(() => () => cancelRun(), []);
+  useEffect(() => {
+    if (guide) guideRef.current?.showModal();
+    else guideRef.current?.close();
+  }, [guide]);
+  useEffect(() => {
+    if (!drawer) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setDrawer(false); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [drawer]);
+
+  function cancelRun() {
+    worker.current?.terminate();
+    worker.current = null;
+    if (runTimer.current) clearTimeout(runTimer.current);
+  }
+
+  /** Stops any in-flight run when navigating away, so the console never stays stuck on "Running…". */
+  function stopRun() {
+    cancelRun();
+    setRun(r => (r?.running ? null : r));
+  }
+
+  function select(next: string) {
+    stopRun();
+    setDrawer(false);
+    setPage('workspace');
+    setFocus(false);
+    if (next !== id) {
+      setId(next);
+      setPlayToken(0);
+      setRun(null);
+      setConsoleTab('testcase');
+      setLeftTab('description');
+    }
+    if (hashId() !== next) location.hash = next;
+  }
+
+  function showProblems() {
+    stopRun();
+    setPage('problems');
+    history.pushState(null, '', location.pathname + location.search);
+  }
+
+  function execute(submit: boolean) {
+    cancelRun();
+    const mode = submit ? 'Submit' : 'Run';
+    const tests = submit ? problem.tests : problem.tests.slice(0, SAMPLE_COUNT);
+    const pid = problem.id;
+    setRun({ mode, running: true, results: [] });
+    setConsoleTab('result');
+
+    const finish = (state: { results: Result[]; verdict: Verdict; error?: string; runtime?: number }) => {
+      cancelRun();
+      setRun({ mode, running: false, ...state });
+      if (!submit) return;
+      const passed = state.results.filter(r => r.passed).length;
+      const entry: Submission = { at: Date.now(), verdict: state.verdict, passed, total: tests.length, runtime: state.runtime };
+      setSubmissions(s => ({ ...s, [pid]: [entry, ...(s[pid] ?? [])].slice(0, 20) }));
+      if (state.verdict === 'Accepted') setSolved(s => (s.includes(pid) ? s : [...s, pid]));
+    };
+
+    const w = new Worker(new URL('./runner.worker.ts', import.meta.url), { type: 'module' });
+    worker.current = w;
+    runTimer.current = setTimeout(() => finish({
+      results: [],
+      verdict: 'Time Limit Exceeded',
+      error: `Your code ran longer than ${TIME_LIMIT_MS / 1000} seconds. Check for an infinite loop.`,
+    }), TIME_LIMIT_MS);
+    w.onmessage = ({ data }) => {
+      if (data.error) {
+        finish({ results: [], verdict: data.errorName === 'SyntaxError' ? 'Compile Error' : 'Runtime Error', error: data.error });
+        return;
+      }
+      const results: Result[] = data.results;
+      const verdict: Verdict = results.every(r => r.passed) ? 'Accepted' : results.some(r => r.error) ? 'Runtime Error' : 'Wrong Answer';
+      finish({ results, verdict, runtime: data.runtime });
+    };
+    w.onerror = e => {
+      e.preventDefault();
+      finish({ results: [], verdict: 'Runtime Error', error: e.message || 'Could not run your code.' });
+    };
+    w.postMessage({ code, problem: { id: pid, functionName: problem.functionName, tests } });
+  }
+
+  // Keep the latest execute() reachable from stable keyboard handlers.
+  const executeRef = useRef(execute);
+  executeRef.current = execute;
+
+  useEffect(() => {
+    if (page !== 'workspace') return;
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey) || e.defaultPrevented) return;
+      if (e.key === 'Enter') { e.preventDefault(); executeRef.current(true); }
+      if (e.key === "'") { e.preventDefault(); executeRef.current(false); }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [page]);
+
+  const running = run?.running ?? false;
+  const problemSubs = submissions[id] ?? [];
+
+  const tabs: { key: LeftTab; label: string; icon: ReactNode }[] = [
+    { key: 'description', label: 'Description', icon: <FileText size={14} className="tab-icon-blue" /> },
+    { key: 'editorial', label: 'Editorial', icon: <BookOpen size={14} className="tab-icon-orange" /> },
+    { key: 'visualizer', label: 'Visualizer', icon: <CirclePlay size={14} className="tab-icon-green" /> },
+    { key: 'submissions', label: 'Submissions', icon: <History size={14} className="tab-icon-blue" /> },
+  ];
+
+  return (
+    <MotionConfig reducedMotion="user">
+      <div className={`app ${page === 'workspace' ? 'workspace-page' : ''}`}>
+        <header className="topbar">
+          <div className="topbar-left">
+            <a href="#" className="brand" onClick={e => { e.preventDefault(); showProblems(); }} aria-label="AlgoPlay home">
+              <span className="brand-mark"><Play size={14} fill="currentColor" /></span>
+              <span className="brand-name">AlgoPlay</span>
+            </a>
+            {page === 'workspace' ? (
+              <>
+                <span className="topbar-divider" />
+                <button className="nav-btn" onClick={() => setDrawer(true)}><List size={16} /><span>Problem List</span></button>
+                <button className="icon-btn" aria-label="Previous problem" title="Previous problem" onClick={() => select(problems[(index - 1 + problems.length) % problems.length].id)}><ChevronLeft size={16} /></button>
+                <button className="icon-btn" aria-label="Next problem" title="Next problem" onClick={() => select(problems[(index + 1) % problems.length].id)}><ChevronRight size={16} /></button>
+                <button className="icon-btn hide-sm" aria-label="Random problem" title="Random problem" onClick={() => select(problems[Math.floor(Math.random() * problems.length)].id)}><Shuffle size={15} /></button>
+              </>
+            ) : (
+              <nav aria-label="Main navigation">
+                <button className="nav-link active">Problems</button>
+                <button className="nav-link" onClick={() => select(id)}>Playground</button>
+              </nav>
+            )}
+          </div>
+
+          {page === 'workspace' && (
+            <div className="run-group">
+              <button className="run-btn" disabled={running} onClick={() => execute(false)} title={`Run (${mod} + ')`}>
+                <Play size={14} fill="currentColor" /><span>Run</span>
+              </button>
+              <button className="submit-btn" disabled={running} onClick={() => execute(true)} title={`Submit (${mod} + Enter)`}>
+                <CloudUpload size={15} /><span>Submit</span>
+              </button>
+            </div>
+          )}
+
+          <div className="topbar-right">
+            <span className="solved-chip" title="Problems solved in this browser">
+              <CircleCheckBig size={14} />{solved.length}/{problems.length}
+            </span>
+            <button className="icon-btn" aria-label="Quick guide" title="Quick guide" onClick={() => setGuide(true)}><CircleHelp size={17} /></button>
+            <button className="icon-btn" aria-label={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'} title="Toggle theme" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>
+              {theme === 'dark' ? <Sun size={17} /> : <Moon size={17} />}
+            </button>
+            <span className="avatar" aria-label="Local learner profile">AP</span>
+          </div>
+        </header>
+
+        {page === 'problems' ? (
+          <ProblemList solved={solved} attempted={attempted} onSelect={select} />
+        ) : (
+          <main className={`workspace ${focus ? 'focus' : ''}`} ref={workspaceRef}>
+            <section className="panel left-panel" style={{ flexBasis: `${split.x}%` }}>
+              <div className="panel-tabs" role="tablist" aria-label="Problem views">
+                {tabs.map((t, i) => (
+                  <Fragment key={t.key}>
+                    {i > 0 && <span className="tab-divider" />}
+                    <button role="tab" aria-selected={leftTab === t.key} className={leftTab === t.key ? 'active' : ''} onClick={() => setLeftTab(t.key)}>
+                      {t.icon}{t.label}
+                    </button>
+                  </Fragment>
+                ))}
+              </div>
+
+              <div className="panel-body description" hidden={leftTab !== 'description'}>
+                <h1 className="problem-title">{problem.number}. {problem.title}</h1>
+                <div className="tags">
+                  <span className={`tag ${difficultyClass(problem.difficulty)}`}>{problem.difficulty}</span>
+                  <span className="tag"><Tag size={12} />{problem.category}</span>
+                  {solved.includes(id) && <span className="solved-mark">Solved <CircleCheckBig size={15} /></span>}
+                </div>
+                <p className="statement"><RichText text={problem.detail} names={names} /></p>
+                <Examples problem={problem} />
+                <p className="example-title">Constraints:</p>
+                <ul className="constraints">
+                  {problem.constraints.map(c => <li key={c}><code>{c}</code></li>)}
+                </ul>
+                <div className="accordions">
+                  <Accordion icon={<Tag size={14} />} title="Topics">
+                    <span className="tag">{problem.category}</span>
+                  </Accordion>
+                  <Accordion icon={<Lightbulb size={14} />} title="Hint 1">
+                    <p>{problem.hint}</p>
+                  </Accordion>
+                  <Accordion icon={<CirclePlay size={14} />} title="See it animated">
+                    <p>The Visualizer tab walks through the reference solution step by step. You can pause, scrub, and edit the input.</p>
+                    <button className="btn" onClick={() => setLeftTab('visualizer')}>Open Visualizer</button>
+                  </Accordion>
+                </div>
+              </div>
+
+              <div className="panel-body editorial" hidden={leftTab !== 'editorial'}>
+                <h2>Approach: {problem.category}</h2>
+                <h3>Intuition</h3>
+                <p>{problem.hint}</p>
+                <div className="callout">
+                  <Lightbulb size={16} />
+                  <p>{problem.analogy}</p>
+                </div>
+                <h3>Algorithm</h3>
+                <ol className="recipe">{problem.pseudocode.map(s => <li key={s}>{s}</li>)}</ol>
+                <h3>Implementation</h3>
+                <pre className="solution-code"><code>{problem.solution}</code></pre>
+                <h3>Complexity Analysis</h3>
+                <ul className="complexity">
+                  <li><b>Time complexity:</b> <code>{problem.complexity[0]}</code></li>
+                  <li><b>Space complexity:</b> <code>{problem.complexity[1]}</code> extra space</li>
+                </ul>
+              </div>
+
+              <div className="panel-body flush" hidden={leftTab !== 'visualizer'}>
+                <Visualizer
+                  key={problem.id}
+                  problem={problem}
+                  active={leftTab === 'visualizer'}
+                  playToken={playToken}
+                  focused={focus}
+                  onToggleFocus={() => setFocus(!focus)}
+                />
+              </div>
+
+              <div className="panel-body" hidden={leftTab !== 'submissions'}>
+                {problemSubs.length ? (
+                  <table className="subs-table">
+                    <thead><tr><th>Status</th><th>Tests</th><th>Runtime</th><th>When</th></tr></thead>
+                    <tbody>
+                      {problemSubs.map(s => (
+                        <tr key={s.at}>
+                          <td className={s.verdict === 'Accepted' ? 'text-success' : 'text-error'}><b>{s.verdict}</b></td>
+                          <td>{s.passed} / {s.total}</td>
+                          <td>{s.runtime === undefined ? 'N/A' : `${Math.max(0, Math.round(s.runtime))} ms`}</td>
+                          <td className="muted">{timeAgo(s.at)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                ) : (
+                  <div className="empty-state">
+                    <History size={28} />
+                    <p>No submissions yet.</p>
+                    <small>Press Submit to run the full test suite. Your history is kept in this browser.</small>
+                  </div>
+                )}
+              </div>
+            </section>
+
+            <Gutter axis="x" container={workspaceRef} value={split.x} min={25} max={70} label="Resize problem and editor panes" onChange={x => setSplit(s => ({ ...s, x }))} />
+
+            <div className="right-col" ref={rightRef}>
+              <section className="panel code-panel" style={{ flexBasis: `${split.y}%` }}>
+                <div className="panel-tabs">
+                  <button className="active"><CodeXml size={15} className="text-success" />Code</button>
+                </div>
+                <div className="editor-toolbar">
+                  <span className="lang-pill">JavaScript</span>
+                  <div>
+                    <button className="text-btn" onClick={() => { setCodes(s => ({ ...s, [id]: problem.solution })); }} title="Replace your code with the reference solution">
+                      <Lightbulb size={13} />Load solution
+                    </button>
+                    <button className="icon-btn" aria-label="Reset code to starter" title="Reset to starter code" onClick={() => setCodes(s => ({ ...s, [id]: problem.starter }))}>
+                      <RotateCcw size={14} />
+                    </button>
+                  </div>
+                </div>
+                <div className="editor-wrap">
+                  <Suspense fallback={<div className="editor-loading">Loading editor…</div>}>
+                    <Editor
+                      value={code}
+                      dark={theme === 'dark'}
+                      onChange={v => setCodes(s => ({ ...s, [id]: v }))}
+                      onRun={() => execute(false)}
+                      onSubmit={() => execute(true)}
+                    />
+                  </Suspense>
+                </div>
+                <div className="editor-footer">
+                  <span>Saved</span>
+                  <span className="hide-sm"><kbd>{mod}</kbd> <kbd>'</kbd> Run · <kbd>{mod}</kbd> <kbd>Enter</kbd> Submit</span>
+                </div>
+              </section>
+
+              <Gutter axis="y" container={rightRef} value={split.y} min={20} max={85} label="Resize editor and console" onChange={y => setSplit(s => ({ ...s, y }))} />
+
+              <Console problem={problem} run={run} tab={consoleTab} onTab={setConsoleTab} />
+            </div>
+          </main>
+        )}
+
+        <AnimatePresence>
+          {drawer && (
+            <>
+              <motion.div className="drawer-backdrop" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setDrawer(false)} />
+              <motion.aside
+                className="drawer"
+                role="dialog"
+                aria-label="Problem list"
+                initial={{ x: '-100%' }}
+                animate={{ x: 0 }}
+                exit={{ x: '-100%' }}
+                transition={{ type: 'tween', duration: 0.22, ease: 'easeOut' }}
+              >
+                <div className="drawer-head">
+                  <button className="drawer-title" onClick={showProblems}>Foundation Collection <ChevronRight size={16} /></button>
+                  <button className="icon-btn" aria-label="Close problem list" onClick={() => setDrawer(false)} autoFocus><X size={17} /></button>
+                </div>
+                <div className="drawer-progress">
+                  <span>{solved.length}/{problems.length} Solved</span>
+                  <div className="progress-track"><span style={{ width: `${(solved.length / problems.length) * 100}%` }} /></div>
+                </div>
+                <div className="drawer-list">
+                  {problems.map(p => (
+                    <button key={p.id} className={`drawer-row ${p.id === id ? 'current' : ''}`} onClick={() => select(p.id)}>
+                      <span className="status-cell">
+                        {solved.includes(p.id) ? <CircleCheckBig size={15} className="text-success" /> : attempted.includes(p.id) ? <span className="attempted" /> : null}
+                      </span>
+                      <span className="drawer-row-title">{p.number}. {p.title}</span>
+                      <span className={difficultyClass(p.difficulty)}>{p.difficulty}</span>
+                    </button>
+                  ))}
+                </div>
+              </motion.aside>
+            </>
+          )}
+        </AnimatePresence>
+
+        <dialog ref={guideRef} onCancel={() => setGuide(false)} onClick={e => { if (e.target === e.currentTarget) setGuide(false); }}>
+          <div className="dialog-heading">
+            <h2>How AlgoPlay works</h2>
+            <button className="icon-btn" aria-label="Close guide" onClick={() => setGuide(false)}><X size={18} /></button>
+          </div>
+          <ol className="guide-steps">
+            <li><b>Read the problem</b><p>Description has the examples and constraints. Editorial explains the approach and complexity.</p></li>
+            <li><b>Watch it run</b><p>The Visualizer tab animates the reference solution. Pause, scrub, change speed, or edit the input.</p></li>
+            <li><b>Write your solution</b><p><b>Run</b> ({mod} + ') checks the sample cases. <b>Submit</b> ({mod} + Enter) checks the full suite and records the result under Submissions.</p></li>
+          </ol>
+          <div className="guide-note">Your code, submissions, and solved problems are saved in this browser. No account needed. Linked-list tests use real nodes with <code>val</code> and <code>next</code>.</div>
+          <div className="dialog-actions">
+            <button className="btn" onClick={() => setGuide(false)}>Close</button>
+            <button className="btn btn-primary" onClick={() => { setGuide(false); if (page !== 'workspace') select(id); setLeftTab('visualizer'); setPlayToken(t => t + 1); }}>
+              <Play size={14} fill="currentColor" />Watch a demo
+            </button>
+          </div>
+        </dialog>
+      </div>
+    </MotionConfig>
+  );
 }
