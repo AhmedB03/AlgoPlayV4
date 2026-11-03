@@ -42,6 +42,14 @@ describe('Python execution and tracing', () => {
     expect(result.results[0].passed).toBe(false);
     expect(result.steps.some((s:any)=>s.locals.marker===130)).toBe(true);
   });
+  it('captures reversed Python heap edges and keeps duplicate-valued nodes distinct',()=>{
+    const problem={...problems[1],tests:[{args:[[1,1,2]],expected:[2,1,1],label:'duplicates'}]};
+    const result=run(pythonSolutions['reverse-list'],problem);
+    const last=result.steps.at(-1);
+    expect(last.heap).toEqual([{id:'n0',value:1,next:null},{id:'n1',value:1,next:'n0'},{id:'n2',value:2,next:'n1'}]);
+    expect(last.refs.return).toBe('n2');
+    expect(result.steps.some((s:any)=>s.heap.length===3&&s.heap[0].next==='n1')).toBe(true);
+  });
   it('returns errors and bounds recordings',()=>{
     const result=run('def twoSum(nums, target):\n    for i in range(1000):\n        marker = i\n    raise ValueError("custom failure")',problems[0]);
     expect(result.steps.length).toBe(500); expect(result.results[0].error).toContain('custom failure');

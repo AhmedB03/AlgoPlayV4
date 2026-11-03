@@ -1,5 +1,5 @@
 import { evaluateCode } from './judge';
-import { instrument, snapshot, type TraceStep } from './userTrace';
+import { instrument, snapshot, createHeapTracker, type TraceStep } from './userTrace';
 import pythonRunner from './pythonRunner.py?raw';
 
 self.onmessage = async ({ data }) => {
@@ -17,14 +17,16 @@ self.onmessage = async ({ data }) => {
     }
     self.postMessage({ ready: true });
     const steps: TraceStep[] = [];
+    const heapTracker = createHeapTracker();
     const hook = '__trace_' + crypto.randomUUID().replaceAll('-', '');
     (globalThis as unknown as Record<string, unknown>)[hook] = (line: number, getters: Record<string, () => unknown>) => {
       if (steps.length >= 500) return;
       const locals: Record<string, unknown> = {};
+      const raw: Record<string, unknown> = {};
       for (const [name, get] of Object.entries(getters)) {
-        try { const value = get(); if (typeof value !== 'function' && value !== globalThis) locals[name] = snapshot(value); } catch { /* Out of scope or not initialized. */ }
+        try { const value = get(); if (typeof value !== 'function' && value !== globalThis) { raw[name] = value; locals[name] = snapshot(value); } } catch { /* Out of scope or not initialized. */ }
       }
-      steps.push({ line, event: 'line', locals });
+      steps.push({ line, event: 'line', locals, ...heapTracker(raw) });
     };
     const start = performance.now();
     try {

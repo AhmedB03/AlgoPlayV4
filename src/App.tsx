@@ -16,6 +16,7 @@ import { ProblemList, difficultyClass } from './components/ProblemList';
 import { Console, SAMPLE_COUNT, type RunState, type Verdict } from './components/Console';
 import { Gutter } from './components/Gutter';
 import './styles.css';
+import './components/execution.css';
 
 const Editor = lazy(() => import('./components/Editor'));
 
@@ -84,7 +85,7 @@ export default function App() {
   const [submissions, setSubmissions] = useState<Record<string, Submission[]>>(() => read('algoplay-submissions', {}, isSubmissions));
   const [split, setSplit] = useState(() => read('algoplay-split', { x: 44, y: 60 }, isSplit));
 
-  const [leftTab, setLeftTab] = useState<LeftTab>('description');
+  const [leftTab, setLeftTab] = useState<LeftTab>('visualizer');
   const [drawer, setDrawer] = useState(false);
   const [guide, setGuide] = useState(false);
   const [focus, setFocus] = useState(false);
@@ -166,7 +167,7 @@ export default function App() {
       setTrace(null);
       setRun(null);
       setConsoleTab('testcase');
-      setLeftTab('description');
+      setLeftTab('visualizer');
     }
     if (hashId() !== next) location.hash = next;
   }
@@ -363,7 +364,7 @@ export default function App() {
               </div>
 
               <div className="panel-body flush" hidden={leftTab !== 'visualizer'}>
-                <ExecutionTrace steps={trace?.steps ?? []} source={trace?.source ?? code} stale={!!trace && (trace.source !== code || trace.language !== language)} active={leftTab === 'visualizer'} running={running} run={() => execute(false)} />
+                <ExecutionTrace problem={problem} result={run} focused={focus} toggleFocus={() => setFocus(!focus)} steps={trace?.steps} source={trace?.source ?? code} stale={!!trace && (trace.source !== code || trace.language !== language)} active={leftTab === 'visualizer'} running={running} run={() => execute(false)} />
               </div>
 
               <div className="panel-body" hidden={leftTab !== 'submissions'}>
