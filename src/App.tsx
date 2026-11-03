@@ -8,6 +8,7 @@ import { problems, type Problem } from './problems';
 import type { Result } from './judge';
 import { read, save } from './storage';
 import { paramNames, show, timeAgo } from './format';
+import { isTheme, isCodes, isSolved, isSubmissions, isSplit, type Submission } from './savedState';
 import { Visualizer } from './components/Visualizer';
 import { ProblemList, difficultyClass } from './components/ProblemList';
 import { Console, SAMPLE_COUNT, type RunState, type Verdict } from './components/Console';
@@ -18,7 +19,6 @@ const Editor = lazy(() => import('./components/Editor'));
 
 type Theme = 'dark' | 'light';
 type LeftTab = 'description' | 'editorial' | 'visualizer' | 'submissions';
-type Submission = { at: number; verdict: Verdict; passed: number; total: number; runtime?: number };
 
 const TIME_LIMIT_MS = 3000;
 const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
@@ -76,11 +76,11 @@ export default function App() {
   const problem = problems.find(p => p.id === id)!;
   const index = problems.indexOf(problem);
 
-  const [theme, setTheme] = useState<Theme>(() => read('algoplay-theme', 'dark'));
-  const [codes, setCodes] = useState<Record<string, string>>(() => read('algoplay-code', {}));
-  const [solved, setSolved] = useState<string[]>(() => read('algoplay-solved', []));
-  const [submissions, setSubmissions] = useState<Record<string, Submission[]>>(() => read('algoplay-submissions', {}));
-  const [split, setSplit] = useState(() => read('algoplay-split', { x: 44, y: 60 }));
+  const [theme, setTheme] = useState<Theme>(() => read('algoplay-theme', 'dark', isTheme));
+  const [codes, setCodes] = useState<Record<string, string>>(() => read('algoplay-code', {}, isCodes));
+  const [solved, setSolved] = useState<string[]>(() => read('algoplay-solved', [], isSolved));
+  const [submissions, setSubmissions] = useState<Record<string, Submission[]>>(() => read('algoplay-submissions', {}, isSubmissions));
+  const [split, setSplit] = useState(() => read('algoplay-split', { x: 44, y: 60 }, isSplit));
 
   const [leftTab, setLeftTab] = useState<LeftTab>('description');
   const [drawer, setDrawer] = useState(false);
