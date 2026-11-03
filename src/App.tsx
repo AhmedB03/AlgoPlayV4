@@ -114,7 +114,11 @@ export default function App() {
     const onHash = () => {
       const next = hashId();
       if (isProblemId(next)) select(next);
-      else setPage('problems');
+      else {
+        stopRun();
+        setDrawer(false);
+        setPage('problems');
+      }
     };
     window.addEventListener('hashchange', onHash);
     return () => window.removeEventListener('hashchange', onHash);
