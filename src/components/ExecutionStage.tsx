@@ -11,6 +11,7 @@ import {
   short,
 } from "../visualState";
 
+import { MOVE_SECONDS } from "../playback";
 const colors = [
   "var(--lab-cyan)",
   "var(--lab-purple)",
@@ -36,7 +37,7 @@ export function ExecutionStage({
 }: Props) {
   const reduce = useReducedMotion();
   const transition = {
-    duration: reduce ? 0 : 0.42 / speed,
+    duration: reduce ? 0 : MOVE_SECONDS / speed,
     ease: "easeInOut" as const,
   };
   const uid = useId().replaceAll(":", "");
@@ -377,6 +378,13 @@ export function ExecutionStage({
                       />
                     )}
                     <motion.rect
+                      className={
+                        pointed
+                          ? "lab-active-cell"
+                          : changed
+                            ? "lab-mutated-cell"
+                            : undefined
+                      }
                       x={-cellWidth / 2}
                       y="210"
                       width={cellWidth}
