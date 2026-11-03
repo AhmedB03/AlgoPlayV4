@@ -773,3 +773,28 @@ dialog .error-box { margin-top: 10px; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; }
 }
+/* Coding workspace: compact chrome, editor-first layout, inspectable state. */
+:root[data-theme='dark'] { --bg: #141414; --panel: #202020; --panel-head: #282828; }
+.editor-toolbar select { background: var(--panel); color: var(--text); border: 1px solid var(--border-strong); border-radius: 5px; padding: 6px 12px; font: inherit; }
+.execution-trace { padding: 22px; }
+.trace-intro { border-bottom: 1px solid var(--border); padding-bottom: 20px; margin-bottom: 20px; }
+.trace-eyebrow { color: var(--green); font: 11px ui-monospace, monospace; letter-spacing: .12em; }
+.trace-intro h2 { font-size: 22px; margin: 12px 0; }
+.trace-intro p { color: var(--text-2); line-height: 1.6; }
+.trace-controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.execution-trace input[type='range'] { width: 100%; margin: 18px 0; accent-color: var(--green); }
+.trace-source { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; overflow: auto; font: 12px/1.9 ui-monospace, monospace; padding: 12px 0; }
+.trace-source > div { padding: 0 14px; min-width: max-content; }
+.trace-source span { color: var(--text-3); display: inline-block; width: 30px; user-select: none; }
+.trace-source .executing { background: var(--green-tint); border-left: 3px solid var(--green); padding-left: 11px; }
+.trace-state-title { margin: 24px 0 12px; color: var(--text-2); font-size: 12px; }
+.trace-variables { display: grid; gap: 12px; }
+.trace-variable { padding: 14px; border: 1px solid var(--border); border-radius: 8px; background: var(--stage); overflow: auto; }
+.trace-variable strong { font: 12px ui-monospace, monospace; color: var(--blue); }
+.trace-variable pre { margin-bottom: 0; font-size: 12px; }
+.trace-array { display: flex; gap: 6px; padding: 12px 0 0; overflow: auto; }
+.trace-array > div { flex: none; text-align: center; }
+.trace-array code { display: block; min-width: 38px; max-width: 180px; padding: 10px; background: var(--fill-2); border: 1px solid var(--border-strong); border-radius: 5px; overflow-wrap: anywhere; white-space: pre-wrap; }
+.trace-array small { display: block; padding-top: 5px; color: var(--text-3); }
+.trace-notice { color: var(--brand); padding: 10px; border: 1px solid var(--brand); border-radius: 5px; }
+@media(max-width: 600px) { .execution-trace { padding: 14px; } }

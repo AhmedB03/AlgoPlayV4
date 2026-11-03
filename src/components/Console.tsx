@@ -82,7 +82,7 @@ export function Console({ problem, run, tab, onTab }: Props) {
         ) : !run ? (
           <p className="console-empty">You must run your code first.</p>
         ) : run.running ? (
-          <div className="console-running"><span className="spinner" />Running…</div>
+          <div className="console-running" role="status"><span className="spinner" />{run.error ?? 'Running…'}</div>
         ) : run.error ? (
           <>
             <div className="verdict error">{run.verdict}</div>

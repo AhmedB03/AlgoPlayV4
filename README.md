@@ -32,15 +32,16 @@ npm run preview
 | Valid Parentheses | Stacks |
 | Graph Breadth-First Search | Graphs and queues |
 
-Each problem has an original explanation, constraints, examples, hints, an analogy, starter JavaScript, a reference solution, test cases, and an animated walkthrough. The graph exercise handles cycles and disconnected nodes. The linked-list runner uses actual nodes with `val` and `next` properties.
+Each problem has an original explanation, constraints, examples, hints, an analogy, Python and JavaScript starter code, a reference solution, test cases, and an execution trace of the code in the editor. The graph exercise handles cycles and disconnected nodes. The linked-list runner uses actual nodes with `val` and `next` properties.
 
 ## A 90-second demo
 
-1. Open Two Sum from the problem list, switch to the **Visualizer** tab, and press Play to show the pointer and matching blocks move.
-2. Use **Problem List** (or the arrows in the top bar) to open Reverse Linked List, use focus mode, and show arrows turning around.
-3. Open Graph Breadth-First Search and watch the moving visitor and queue.
-4. Click Load solution, then **Submit** (Ctrl/⌘ + Enter). Show the verdict, the per-case results, and the entry under **Submissions**.
-5. Click Edit input in the Visualizer to show that the walkthrough is generated from the data.
+1. Open Two Sum. Python 3 is the default; JavaScript is also supported.
+2. Write a solution (or explicitly choose Load solution), then Run or Submit.
+3. Open Visualizer, click Run & visualize, and step through the captured source
+   lines and variables. Change your code to an incorrect implementation and
+   rerun: the trace follows that implementation, not the reference answer.
+4. Switch languages. Drafts are saved separately per problem and language.
 
 ## Layout
 
@@ -55,9 +56,25 @@ The workspace follows the LeetCode/NeetCode layout: a tabbed problem pane on the
 - Vitest for judge and animation correctness
 - Local browser storage for code drafts, submissions, solved status, theme, and pane sizes
 
-`src/problems.ts` contains lesson content, starter code, reference solutions, and tests. `src/traces.ts` generates deterministic reference-algorithm traces from validated custom input. `src/App.tsx` is the app shell and workspace; `src/components/` holds the visualizer (which animates objects between trace states), problem list, editor, test console, and resizable pane dividers. `src/judge.ts` validates function output and adapts linked-list inputs and outputs.
+`src/problems.ts` holds lesson content and JavaScript examples; `src/languages.ts`
+holds Python starters and examples. `src/runner.worker.ts` executes submissions.
+Python runs through Pyodide 0.27.7 (CPython/WebAssembly) downloaded from jsDelivr;
+the first load needs network access. Loading has a 60-second limit, followed by
+a separate 3-second execution limit. JavaScript uses Acorn statement instrumentation;
+Python uses `sys.settrace`. Python trace tests require a local Python interpreter
+(`PYTHON` can override the executable).
 
-Animations describe the reference algorithm; they do not instrument arbitrary user code. Run executes two sample tests; Submit executes the full included suite. Animation inputs are size-limited for legibility. The editor executes JavaScript only. There is no account system, backend, remote judge, or cloud progress sync. The worker keeps accidental infinite loops off the UI thread; this is a local learning runner, not a hardened multi-tenant sandbox. Do not add secrets to the frontend or execute untrusted imported code.
+Run checks two samples; Submit checks the full suite. The visualizer captures
+**the first test case only**, capped at 500 events with bounded variable snapshots.
+State is recorded before an executed statement; Python also records return and
+exception events. Arrays render as indexed cells; maps and linked objects are
+inspectable snapshots. This is a source-level debugger, not a semantic animation
+of every possible algorithm. Async JavaScript and external Python packages are
+not supported. The former reference walkthrough is no longer wired into the UI.
+
+Workers terminate on timeout, navigation, or language changes. Editing marks an
+existing trace stale. This is an educational local runner, not a hardened sandbox.
+There is no account system or cloud sync. Existing JavaScript drafts are retained.
 
 ## Deploy to Vercel
 
