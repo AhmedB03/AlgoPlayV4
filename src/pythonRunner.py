@@ -6,6 +6,15 @@ def run_submission(payload):
     class ListNode:
         def __init__(self, val=0, next=None):
             self.val, self.next = val, next
+    nodes = {}
+    def node_id(value):
+        if not isinstance(value, ListNode): return None
+        if id(value) in nodes: return nodes[id(value)][0]
+        if len(nodes) >= 30: return None
+        key = 'n' + str(len(nodes))
+        nodes[id(value)] = (key, value)
+        node_id(value.next)
+        return key
     def snap(v, depth=0, seen=None):
         seen = set() if seen is None else seen
         if isinstance(v, float) and not math.isfinite(v): return str(v)
@@ -22,7 +31,10 @@ def run_submission(payload):
         if frame.f_code.co_filename == '<solution>' and event in ('line', 'return', 'exception') and len(steps) < 500:
             local = {k:snap(v) for k,v in list(frame.f_locals.items())[:30] if not k.startswith('__') and not callable(v)}
             if event == 'return': local['return'] = snap(arg)
-            steps.append({'line': frame.f_lineno, 'event': event, 'locals': local})
+            refs = {k:node_id(v) for k,v in list(frame.f_locals.items())[:30] if v is None or isinstance(v, ListNode)}
+            if event == 'return' and isinstance(arg, ListNode): refs['return'] = node_id(arg)
+            heap = [{'id': key, 'value': snap(v.val), 'next': node_id(v.next)} for key,v in list(nodes.values())]
+            steps.append({'line': frame.f_lineno, 'event': event, 'locals': local, 'heap': heap, 'refs': refs})
         return trace
     compiled = compile(code, '<solution>', 'exec')
     for index, test in enumerate(problem['tests']):
