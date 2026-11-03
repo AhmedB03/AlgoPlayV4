@@ -1,6 +1,7 @@
-export function read<T>(key: string, fallback: T): T {
+export function read<T>(key: string, fallback: T, valid: (value: unknown) => value is T): T {
   try {
-    return JSON.parse(localStorage.getItem(key) ?? 'null') ?? fallback;
+    const value: unknown = JSON.parse(localStorage.getItem(key) ?? 'null');
+    return valid(value) ? value : fallback;
   } catch {
     return fallback;
   }
