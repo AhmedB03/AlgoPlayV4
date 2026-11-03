@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useReducedMotion } from "motion/react";
+import { motion, useReducedMotion } from "motion/react";
 import {
   Maximize2,
   Minimize2,
@@ -16,6 +16,7 @@ import type { RunState } from "./Console";
 import { changes, inputValues, sequence, short } from "../visualState";
 import { ExecutionStage } from "./ExecutionStage";
 
+import { FRAME_MS, frameChanges, nextChange } from "../playback";
 const EMPTY: TraceStep[] = [];
 type Props = {
   steps?: TraceStep[];
@@ -69,7 +70,7 @@ export function ExecutionTrace({
           }
           return i + 1;
         }),
-      850 / speed,
+      FRAME_MS / speed,
     );
     return () => clearInterval(timer);
   }, [playing, steps.length, speed]);
@@ -103,6 +104,7 @@ export function ExecutionTrace({
     setPlaying((p) => !p);
   };
   const verdict = result?.results[0];
+  const delta = frameChanges(previous, step);
   return (
     <div
       className="execution-lab"
@@ -163,6 +165,59 @@ export function ExecutionTrace({
           {result.verdict}: {result.error}
         </p>
       )}
+      <div className="lab-step-story">
+        <div className="lab-story-heading">
+          <span>
+            {step
+              ? `FRAME ${String(index + 1).padStart(2, "0")}`
+              : "YOUR CODE, IN MOTION"}
+          </span>
+          <button
+            aria-label="Next change"
+            disabled={!step || stale || index === steps.length - 1}
+            onClick={() => jump(nextChange(steps, index))}
+          >
+            Next change →
+          </button>
+        </div>
+        <motion.div
+          key={index}
+          initial={reduce ? false : { opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: reduce ? 0 : 0.3 }}
+        >
+          <strong>
+            {!step
+              ? "See what your solution actually does."
+              : step.event === "return"
+                ? "Your function returns."
+                : delta.length
+                  ? `${delta.length} state ${delta.length === 1 ? "change" : "changes"} to inspect.`
+                  : "Follow the next instruction."}
+          </strong>
+          {step && (
+            <code className="lab-story-code">
+              L{step.line} · {source.split("\n")[step.line - 1]?.trim()}
+            </code>
+          )}
+          <div className="lab-deltas">
+            {delta.slice(0, 3).map((d) => (
+              <div key={d.name}>
+                <b>{d.name}</b>
+                <span>{d.before}</span>
+                <i>→</i>
+                <em>{d.after}</em>
+              </div>
+            ))}
+          </div>
+          {!step && (
+            <p>
+              Run a solution. Follow the moving pointers, watch memory change,
+              and step through the exact moment it goes wrong.
+            </p>
+          )}
+        </motion.div>
+      </div>
       <ExecutionStage
         problem={problem}
         step={step}
