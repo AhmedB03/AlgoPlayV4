@@ -9,7 +9,9 @@ import type { Result } from './judge';
 import { read, save } from './storage';
 import { paramNames, show, timeAgo } from './format';
 import { isTheme, isCodes, isSolved, isSubmissions, isSplit, type Submission } from './savedState';
-import { Visualizer } from './components/Visualizer';
+import { ExecutionTrace } from './components/ExecutionTrace';
+import { starter, pythonSolutions, isLanguage, type Language } from './languages';
+import type { TraceStep } from './userTrace';
 import { ProblemList, difficultyClass } from './components/ProblemList';
 import { Console, SAMPLE_COUNT, type RunState, type Verdict } from './components/Console';
 import { Gutter } from './components/Gutter';
@@ -72,7 +74,7 @@ function Accordion({ icon, title, children }: { icon: ReactNode; title: string; 
 
 export default function App() {
   const [id, setId] = useState(() => (isProblemId(hashId()) ? hashId() : problems[0].id));
-  const [page, setPage] = useState<'workspace' | 'problems'>(() => (isProblemId(hashId()) ? 'workspace' : 'problems'));
+  const [page, setPage] = useState<'workspace' | 'problems'>(() => ('workspace'));
   const problem = problems.find(p => p.id === id)!;
   const index = problems.indexOf(problem);
 
@@ -86,7 +88,9 @@ export default function App() {
   const [drawer, setDrawer] = useState(false);
   const [guide, setGuide] = useState(false);
   const [focus, setFocus] = useState(false);
-  const [playToken, setPlayToken] = useState(0);
+  const [language, setLanguage] = useState<Language>(() => read('algoplay-language', 'python', isLanguage));
+  const [pythonCodes, setPythonCodes] = useState<Record<string,string>>(() => read('algoplay-python-code', {}, isCodes));
+  const [trace, setTrace] = useState<{steps: TraceStep[]; source: string; language: Language} | null>(null);
   const [run, setRun] = useState<RunState | null>(null);
   const [consoleTab, setConsoleTab] = useState<'testcase' | 'result'>('testcase');
 
@@ -96,7 +100,11 @@ export default function App() {
   const workspaceRef = useRef<HTMLElement>(null);
   const rightRef = useRef<HTMLDivElement>(null);
 
-  const code = codes[id] ?? problem.starter;
+  const code = (language === 'python' ? pythonCodes : codes)[id] ?? starter(problem, language);
+  const solution = language === 'python' ? pythonSolutions[id] : problem.solution;
+  const setDraft = (value: string) => (language === 'python' ? setPythonCodes : setCodes)(s => ({ ...s, [id]: value }));
+  useEffect(() => { save('algoplay-python-code', pythonCodes); }, [pythonCodes]);
+  useEffect(() => { save('algoplay-language', language); }, [language]);
   const names = paramNames(problem);
   const attempted = Object.keys(submissions).filter(k => submissions[k].length && !solved.includes(k));
 
@@ -155,7 +163,7 @@ export default function App() {
     setFocus(false);
     if (next !== id) {
       setId(next);
-      setPlayToken(0);
+      setTrace(null);
       setRun(null);
       setConsoleTab('testcase');
       setLeftTab('description');
@@ -174,7 +182,8 @@ export default function App() {
     const mode = submit ? 'Submit' : 'Run';
     const tests = submit ? problem.tests : problem.tests.slice(0, SAMPLE_COUNT);
     const pid = problem.id;
-    setRun({ mode, running: true, results: [] });
+    setTrace(null);
+    setRun({ mode, running: true, results: [], error: language === 'python' ? 'Loading Python runtime…' : undefined });
     setConsoleTab('result');
 
     const finish = (state: { results: Result[]; verdict: Verdict; error?: string; runtime?: number }) => {
@@ -192,11 +201,19 @@ export default function App() {
     runTimer.current = setTimeout(() => finish({
       results: [],
       verdict: 'Time Limit Exceeded',
-      error: `Your code ran longer than ${TIME_LIMIT_MS / 1000} seconds. Check for an infinite loop.`,
-    }), TIME_LIMIT_MS);
+      error: language === 'python' ? 'Python could not load within 60 seconds. Check your connection and try again.' : 'Execution exceeded 3 seconds. Check for an infinite loop.',
+    }), language === 'python' ? 60000 : TIME_LIMIT_MS);
     w.onmessage = ({ data }) => {
+      if (worker.current !== w) return;
+      if (data.ready) {
+        if (runTimer.current) clearTimeout(runTimer.current);
+        setRun({ mode, running: true, results: [] });
+        runTimer.current = setTimeout(() => finish({results: [], verdict: 'Time Limit Exceeded', error: 'Execution exceeded 3 seconds.'}), TIME_LIMIT_MS);
+        return;
+      }
+      if (data.steps) setTrace({steps: data.steps, source: code, language});
       if (data.error) {
-        finish({ results: [], verdict: data.errorName === 'SyntaxError' ? 'Compile Error' : 'Runtime Error', error: data.error });
+        finish({ results: [], verdict: (data.errorName === 'SyntaxError' || /SyntaxError|IndentationError/.test(data.error)) ? 'Compile Error' : 'Runtime Error', error: data.error });
         return;
       }
       const results: Result[] = data.results;
@@ -207,7 +224,7 @@ export default function App() {
       e.preventDefault();
       finish({ results: [], verdict: 'Runtime Error', error: e.message || 'Could not run your code.' });
     };
-    w.postMessage({ code, problem: { id: pid, functionName: problem.functionName, tests } });
+    w.postMessage({ code, language, problem: { id: pid, functionName: problem.functionName, tests } });
   }
 
   // Keep the latest execute() reachable from stable keyboard handlers.
@@ -320,7 +337,7 @@ export default function App() {
                     <p>{problem.hint}</p>
                   </Accordion>
                   <Accordion icon={<CirclePlay size={14} />} title="See it animated">
-                    <p>The Visualizer tab walks through the reference solution step by step. You can pause, scrub, and edit the input.</p>
+                    <p>Run your code, then inspect its executed lines and variable values in the Visualizer tab.</p>
                     <button className="btn" onClick={() => setLeftTab('visualizer')}>Open Visualizer</button>
                   </Accordion>
                 </div>
@@ -337,7 +354,7 @@ export default function App() {
                 <h3>Algorithm</h3>
                 <ol className="recipe">{problem.pseudocode.map(s => <li key={s}>{s}</li>)}</ol>
                 <h3>Implementation</h3>
-                <pre className="solution-code"><code>{problem.solution}</code></pre>
+                <pre className="solution-code"><code>{solution}</code></pre>
                 <h3>Complexity Analysis</h3>
                 <ul className="complexity">
                   <li><b>Time complexity:</b> <code>{problem.complexity[0]}</code></li>
@@ -346,14 +363,7 @@ export default function App() {
               </div>
 
               <div className="panel-body flush" hidden={leftTab !== 'visualizer'}>
-                <Visualizer
-                  key={problem.id}
-                  problem={problem}
-                  active={leftTab === 'visualizer'}
-                  playToken={playToken}
-                  focused={focus}
-                  onToggleFocus={() => setFocus(!focus)}
-                />
+                <ExecutionTrace steps={trace?.steps ?? []} source={trace?.source ?? code} stale={!!trace && (trace.source !== code || trace.language !== language)} active={leftTab === 'visualizer'} running={running} run={() => execute(false)} />
               </div>
 
               <div className="panel-body" hidden={leftTab !== 'submissions'}>
@@ -389,12 +399,12 @@ export default function App() {
                   <button className="active"><CodeXml size={15} className="text-success" />Code</button>
                 </div>
                 <div className="editor-toolbar">
-                  <span className="lang-pill">JavaScript</span>
+                  <select aria-label="Programming language" value={language} onChange={e => { stopRun(); setTrace(null); setRun(null); setLanguage(e.target.value as Language); }}><option value="python">Python 3</option><option value="javascript">JavaScript</option></select>
                   <div>
-                    <button className="text-btn" onClick={() => { setCodes(s => ({ ...s, [id]: problem.solution })); }} title="Replace your code with the reference solution">
+                    <button className="text-btn" onClick={() => { setDraft(solution); }} title="Replace your code with the reference solution">
                       <Lightbulb size={13} />Load solution
                     </button>
-                    <button className="icon-btn" aria-label="Reset code to starter" title="Reset to starter code" onClick={() => setCodes(s => ({ ...s, [id]: problem.starter }))}>
+                    <button className="icon-btn" aria-label="Reset code to starter" title="Reset to starter code" onClick={() => setDraft(starter(problem, language))}>
                       <RotateCcw size={14} />
                     </button>
                   </div>
@@ -403,8 +413,9 @@ export default function App() {
                   <Suspense fallback={<div className="editor-loading">Loading editor…</div>}>
                     <Editor
                       value={code}
+                      language={language}
                       dark={theme === 'dark'}
-                      onChange={v => setCodes(s => ({ ...s, [id]: v }))}
+                      onChange={v => setDraft(v)}
                       onRun={() => execute(false)}
                       onSubmit={() => execute(true)}
                     />
@@ -467,13 +478,13 @@ export default function App() {
           </div>
           <ol className="guide-steps">
             <li><b>Read the problem</b><p>Description has the examples and constraints. Editorial explains the approach and complexity.</p></li>
-            <li><b>Watch it run</b><p>The Visualizer tab animates the reference solution. Pause, scrub, change speed, or edit the input.</p></li>
+            <li><b>Watch it run</b><p>The Visualizer records your code on the first test case. Step through executed lines and inspect changing values.</p></li>
             <li><b>Write your solution</b><p><b>Run</b> ({mod} + ') checks the sample cases. <b>Submit</b> ({mod} + Enter) checks the full suite and records the result under Submissions.</p></li>
           </ol>
           <div className="guide-note">Your code, submissions, and solved problems are saved in this browser. No account needed. Linked-list tests use real nodes with <code>val</code> and <code>next</code>.</div>
           <div className="dialog-actions">
             <button className="btn" onClick={() => setGuide(false)}>Close</button>
-            <button className="btn btn-primary" onClick={() => { setGuide(false); if (page !== 'workspace') select(id); setLeftTab('visualizer'); setPlayToken(t => t + 1); }}>
+            <button className="btn btn-primary" onClick={() => { setGuide(false); if (page !== 'workspace') select(id); setLeftTab('visualizer');  }}>
               <Play size={14} fill="currentColor" />Watch a demo
             </button>
           </div>
