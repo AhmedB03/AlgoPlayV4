@@ -70,6 +70,21 @@ npx vercel --prod
 
 Keep `.vercel`, `.env` files, `node_modules`, and `dist` out of source control. The original `filename.txt` location marker is preserved locally and excluded from the repository.
 
+## Browser navigation regression check
+
+```sh
+npx playwright install chromium
+npm run dev
+# In another terminal, while the app is running:
+node scripts/check-navigation.mjs
+```
+
+Set `APP_URL` for a different preview address. `BROWSER_CHANNEL=msedge` or
+`chrome` uses an installed browser instead of the bundled Chromium. The check
+holds a submission open with a test worker, leaves via Back or hash changes,
+and verifies termination, timeout cancellation, no saved phantom submission,
+and a usable workspace after returning. Each case uses fresh browser storage.
+
 ## Accessibility
 
 Keyboard-operable controls, labeled animation controls and editor, native focus-trapped dialogs, visible focus rings, reduced-motion support, text explanations alongside visual state, and responsive layouts. Code and completion data belong to the current browser and device.
